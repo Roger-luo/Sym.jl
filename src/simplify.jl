@@ -95,16 +95,6 @@ function merge_terms(ex::SymExpr)
     merge_terms(ex.f, ex)
 end
 
-
-# function merge_terms(::typeof(-), ex::SymExpr)
-#     length(ex.args) == 1 && return ex
-#     if ex.args[1] == ex.args[2]
-#         return Zero()
-#     else
-#         return ex
-#     end
-# end
-
 function merge_terms(::typeof(+), ex::SymExpr)
     ex = flatten(+, ex)
 
@@ -236,7 +226,7 @@ function rm_zeros(::typeof(/), ex::SymExpr{typeof(/)})
 end
 
 function rm_zeros(::typeof(exp), ex::SymExpr{typeof(exp)})
-    iszero(ex.args[1]) && return One()
+    iszero(ex.args[1]) && return 1
     return ex
 end
 
@@ -274,26 +264,6 @@ function rm_ones(::typeof(/), ex::SymExpr)
     return ex
 end
 
-complex_exp(x) = x
-@rule function complex_exp(ex::SymExpr{typeof(exp)})
-    isreal(ex.args[1]) && return ex
-    ex.args[1] isa SymComplex && return ex
-
-    r, x = pi_rational(ex.args[1])
-    x === nothing && return ex # not rational
-
-    x = periodic_pi_factor(x)
-    x == 2 && return exp(r) * One()
-    x == 1 && return exp(r) * -One()
-    x == 1//2 && return exp(r) * im
-
-    sqrthalf = SymExpr(/, 1, SymExpr(sqrt, 2))
-    x == 1//4 && return Complex{SymReal}(sqrthalf, sqrthalf)
-    
-    # fallback
-    x = SymReal(SymExpr(*, [x, Constant{:π}()]))
-    return SymExpr(exp, [Complex{SymReal}(0, x)])
-end
 
 # deal with π
 haspi(x) = false
@@ -377,6 +347,36 @@ simple_power(x) = x
     return simple_power(ex, x, n)
 end
 
+is_exponential(x) = false
+is_exponential(x::SymExpr{typeof(exp)}) = true
+
+has_exponential(x) = false
+function has_exponential(x::SymExpr)
+    for each in x.args
+        is_exponential(each) && return true
+    end
+    return false
+end
+
+function simple_power(ex::SymExpr{typeof(*)})
+    has_exponential(ex) || return ex
+
+    exp_args = []
+    args = []
+
+    for each in ex.args
+        if is_exponential(each)
+            push!(exp_args, each.args[1])
+        else
+            push!(args, each)
+        end
+    end
+
+    length(exp_args) == 1 && return ex
+    push!(args, SymExpr(exp, [SymExpr(+, exp_args)]))
+    return SymExpr(*, args)
+end
+
 function simple_power(ex::SymExpr, x, n)
     return ex
 end
@@ -389,54 +389,32 @@ function simple_power(ex::SymExpr, x::SymExpr{typeof(exp)}, n)
     return SymExpr(exp, x.args[1] * n)
 end
 
-function simple_power(ex::SymExpr, x::Complex{Bool}, n)
-    iszero(x) && return 0
-
-    if iszero(real(x))
-        r = rem(n, 4)
-        r == 1 && return im
-        r == 2 && return -One()
-        r == 3 && return -im
-        r == 0 && return One()
-    elseif iszero(imag(x))
-        return One()
-    else
-        r = SymExpr(sqrt, [Constant{2}()])
-        angle = SymExpr(/, [Constant{:π}(), 4])
-        return exp(Complex{SymReal}(SymReal(0), SymReal(angle)))
-    end
-end
-
 merge_complex(x) = x
-iscomplex(x) = false
-iscomplex(::Complex) = true
+is_imaginary_unit(x) = false
+is_imaginary_unit(x::Im) = true
 
-function hascomplex(x::SymExpr)
-    for each in x.args
-        iscomplex(each) && return true
-    end
-    return false
+function literal_im_pow(n::Int)
+    n == 1 ? Im()  :
+    n == 2 ? -1    :
+    n == 3 ? -Im() :
+    n == 0 ? 1     :
+    literal_im_pow(rem(n, 4))
 end
 
 @rule function merge_complex(x::SymExpr{typeof(*)})
-    hascomplex(x) || return x
-    re = real(x.args[1])
-    im = imag(x.args[1])
-
-    for k in 2:length(x.args)
-
-        u = real(x.args[k])
-        v = imag(x.args[k])
-
-        re = re * u - im * v
-        im = re * v + im * u
+    count = 0
+    args = []
+    for each in x.args
+        if is_imaginary_unit(each)
+            count += 1
+        else
+            push!(args, each)
+        end
     end
-
-    if iszero(im)
-        return re
-    else
-        return Complex{SymReal}(SymReal(re), SymReal(im))
-    end
+    i = literal_im_pow(count)
+    isone(i) && return SymExpr(*, args)
+    push!(args, i)
+    return SymExpr(*, args)
 end
 
 export maprule, simplify, simplify_step
@@ -447,8 +425,6 @@ Map simplification rule `rule` to expression `x`
 recursively.
 """
 maprule(rule, x) = x
-maprule(rule, x::T) where {T <: Union{SymReal, SymComplex}} =
-    T(maprule(rule, data(x)))
 
 function maprule(rule, ex::SymExpr)
     nex = rule(ex)
