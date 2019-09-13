@@ -8,9 +8,6 @@ struct Im <: AbstractExpr end
 struct Constant{sym} <: AbstractExpr end
 Constant(sym::Symbol) = Constant{sym}()
 
-Base.real(x::AbstractExpr) = x
-Base.imag(x::AbstractExpr) = 0
-
 struct SymExpr{F} <: AbstractExpr
     f::F
     args::Vector
@@ -29,7 +26,6 @@ isexpr(::SymExpr) = true
 Base.signbit(::AbstractExpr) = false
 Base.signbit(x::SymExpr{typeof(-)}) = length(x.args) == 1
 
-
 function inline(io::IO)
     get(io, :inline, false) || return IOContext(io, :inline=>true)
     return io
@@ -43,6 +39,7 @@ function noinline(io::IO)
 end
 
 Base.show(io::IO, x::Variable) = print(io, x.name)
+Base.show(io::IO, x::Im) = print(io, "im")
 Base.show(io::IO, x::Constant{sym}) where sym = print(io, sym)
 function Base.show(io::IO, ex::SymExpr)
     print_expr(io, ex, ex)
