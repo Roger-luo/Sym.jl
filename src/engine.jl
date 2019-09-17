@@ -1,3 +1,5 @@
+export AbstractExpr, Variable, SymExpr, Constant, Im, isexpr
+
 abstract type AbstractExpr end
 
 struct Variable <: AbstractExpr

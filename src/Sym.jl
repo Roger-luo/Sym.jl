@@ -13,7 +13,9 @@ include("patch.jl")
 include("real.jl")
 include("complex.jl")
 include("promotions.jl")
+
 SymReal(x::SymComplex) = throw(InexactError(:SymReal, SymReal, x))
+
 
 function simplify(ex::T; rules=DEFINED_RULES, maxstep=1000) where {T <: Union{SymReal, SymComplex}}
     T(simplify(data(ex), rules=rules, maxstep=maxstep))
@@ -28,7 +30,6 @@ end
 
 # libs
 include("math.jl")
-
 include("simplify.jl")
 
 export @sym
