@@ -1,23 +1,40 @@
-eval_args(mod::Module, ex) = ex
-eval_args(mod::Module, s::Symbol) = s === :_ ? s : Expr(:&, mod.eval(s))
-eval_args(mod::Module, ex::Expr) =
-    @match ex begin
-        Expr(:call, :of_mlstyle, a) => a
+symbolic_pattern(mod::Module, ex) = ex
+symbolic_pattern(mod::Module, s::Symbol) = s === :_ ? s : Expr(:&, mod.eval(s))
+function symbolic_pattern(mod::Module, ex::Expr)
+    rec(x) = symbolic_pattern(mod, x)
+    MLStyle.@match ex begin
+        Expr(:call, :mlstyle, a) => mlstyle_pattern(mod, a)
+        Expr(:call, :Term, f, args...) &&
+            if isdefined(mod, :Term) &&
+               getfield(mod, :Term) == Term
+            end ||
         Expr(:call, f, args...) =>
-            let f = eval_args(mod, f)
-                args = :[$((eval_args(mod, arg) for arg in args)...)]
+            let f = symbolic_pattern(mod, f)
+                args = :[$((symbolic_pattern(mod, arg) for arg in args)...)]
                 Expr(:call, :Term, f, args)
             end
+        Expr(hd, tl...) => Expr(hd, map(rec, tl)...)
     end
+end
 
-macro match!(target, cbl)
+mlstyle_pattern(mod::Module, ex) = ex
+function mlstyle_pattern(mod::Module, ex::Expr)
+    rec(x) = mlstyle_pattern(mod, x)
+    MLStyle.@match ex begin
+        Expr(:call, :symbolic, a) => symbolic_pattern(mod, a)
+        Expr(hd, tl...) => Expr(hd, map(rec, tl)...)
+    end
+end
+
+
+macro match(target, cbl)
     Meta.isexpr(cbl, :block) ||
         error("invalid syntax, match cases should be given in form of begin ... end.")
     cbl.args = map(cbl.args) do case
-        @match case begin
+        MLStyle.@match case begin
             ::LineNumberNode => case
             :($a => $b) => begin
-                a = eval_args(__module__, a)
+                a = symbolic_pattern(__module__, a)
                 :($a => $b)
             end
         end
