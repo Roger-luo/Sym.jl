@@ -20,3 +20,11 @@ Base.show(io::IO, ::Constant{sym}) where sym = print(io, sym)
 for op in [:+, :-, :*, :/, :\]
     @eval Base.$op(x::Expression, y::Expression) = Term($op, x, y)
 end
+
+function print_term(io::IO, t::Term)
+    @match t begin
+        Term(*, $a::Number, $x::Variable) => print(io, a, x)
+        Term(*, _) => print_infix(io, :*, t)
+        _ => error("invalid term")
+    end
+end
