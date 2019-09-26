@@ -9,9 +9,9 @@ struct Im <: Expression end
 struct Term{F} <: Expression
     head::F
     args::Vector{Any}
+    Term(f::F, xs...) where F = new{F}(f, collect(xs))
 end
 
-Term(f, xs...) = Term(f, collect(xs))
 
 Base.show(io::IO, x::Variable) = print(io, x.name)
 Base.show(io::IO, ::Im) = print(io, "im")
