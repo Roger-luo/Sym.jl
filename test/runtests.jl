@@ -1,5 +1,2 @@
-using Sym
-using Test
+using Test, Sym
 
-include("engine.jl")
-include("real.jl")
