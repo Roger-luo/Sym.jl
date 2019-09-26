@@ -11,7 +11,7 @@ struct Term{F} <: Expression
     args::Vector{Any}
     Term(f::F, xs...) where F = new{F}(f, collect(xs))
 end
-
+@as_record internal Term
 
 Base.show(io::IO, x::Variable) = print(io, x.name)
 Base.show(io::IO, ::Im) = print(io, "im")
