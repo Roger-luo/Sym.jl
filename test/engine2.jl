@@ -1,3 +1,4 @@
+using MLStyle
 abstract type Expression end
 struct Variable <: Expression
     name::Symbol
@@ -19,4 +20,7 @@ Base.show(io::IO, ::Constant{sym}) where sym = print(io, sym)
 
 for op in [:+, :-, :*, :/, :\]
     @eval Base.$op(x::Expression, y::Expression) = Term($op, x, y)
+end
+
+function print_term(io::IO, ex::Term)
 end

@@ -24,5 +24,5 @@ Base.show(io::IO, x::SymReal) = print(io, x.data)
 Base.signbit(x::SymReal) = signbit(data(x))
 Base.iszero(x::SymReal) = iszero(data(x))
 
-Base.literal_pow(::typeof(^), x::SymReal, n::Val{N}) where N = SymReal(^, x, n)
+Base.literal_pow(::typeof(^), x::SymReal, n::Val{N}) where N = SymReal(Base.literal_pow, ^, x, n)
 Base.literal_pow(::typeof(^), x::SymReal, n::Val{1}) = x

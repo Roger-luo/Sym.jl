@@ -30,6 +30,8 @@ handle(::Val{:call}, expr) = handle(expr.args[1])
 macro rule(ex::Expr)
     name = handle(ex)
     quote
+        export $(esc(name))
+        $(esc(name))(x) = x # identity by default
         Base.@__doc__ $(esc(ex))
         define_rule($(esc(name)))
     end
@@ -44,10 +46,7 @@ has_same_operator(f, ex) = false
 
 Return flattened expression `x`.
 """
-@rule function flatten end
-
-flatten(x) = x
-flatten(ex::SymExpr) = flatten(ex.f, ex)
+@rule flatten(ex::SymExpr) = flatten(ex.f, ex)
 
 """
     is_associative(x)
@@ -71,18 +70,10 @@ function flatten(f::F, ex::SymExpr{F}) where F
     SymExpr(f, args)
 end
 
-"""
-    merge_terms(x)
-
-Merge similar terms in expression `x`.
-"""
-@rule merge_terms(x) = x
-merge_terms(f, x) = x
-
 function count_terms(ex::SymExpr)
-    terms = IdDict{Any, Int}()
-    for each in ex.args
-        if haskey(terms, each)
+    terms = Dict{Any, Int}()
+    for each in ex
+        if haskey(each in terms)
             terms[each] += 1
         else
             terms[each] = 1
@@ -91,53 +82,120 @@ function count_terms(ex::SymExpr)
     return terms
 end
 
-function merge_terms(ex::SymExpr)
-    merge_terms(ex.f, ex)
-end
+function accumulate_numerics(f, ex::SymExpr)
+    # skip simple cases
+    if (length(ex.args) == 2) && (ex.args[1] isa Number) && !(ex.args[2] isa Number)
+        return ex.args[1], ex.args[2]
+    end
 
-function merge_terms(::typeof(+), ex::SymExpr)
-    ex = flatten(+, ex)
-
-    terms = count_terms(ex)
-
-    args = []
-    for (term, α) in terms
-        if isone(α)
-            push!(args, term)
+    i = findfirst(x->isa(x, Number), ex.args)
+    i == nothing && return nothing, ex
+    α = ex.args[i]
+    args = ex.args[1:i-1]
+    for k in i+1:length(ex.args)
+        if ex.args[k] isa Number
+            α = f(α, ex.args[k])
         else
-            push!(args, SymExpr(*, [α, term]))
+            push!(args, ex.args[k])
         end
     end
+    isempty(args) && return α, nothing
+    return α, SymExpr(*, args)
+end
 
-    isempty(args) && return 0
-    if length(args) == 1
-        return args[1]
-    else
-        SymExpr(+, args)
+@rule function eval_numeric(ex::SymExpr{typeof(*)})
+    ex = maprule(flatten, ex)
+    α, term = accumulate_numerics(*, ex)
+    α === nothing && return ex
+    term === nothing && return α
+    isone(α) && return term
+    return α * term
+end
+
+function eval_numeric(ex::SymExpr{typeof(+)})
+    ex = maprule(flatten, ex)
+    α, term = accumulate_numerics(+, ex)
+    α === nothing && return ex
+    term === nothing && return α
+    iszero(α) && return term
+    return α + term
+end
+
+
+"""
+    merge_terms(x)
+
+Merge similar terms in expression `x`.
+"""
+@rule function merge_terms(ex::SymExpr{typeof(+)})
+    ex = maprule(flatten, ex) # make things easier if we flatten
+    terms = Dict{Any, Int}()
+    for each in ex.args
+        count_term!(+, terms, each)
     end
+
+    args = []
+    for (t, α) in terms
+        if isone(α)
+            push!(args, t)
+        else
+            push!(args, α * t)
+        end
+    end
+    return SymExpr(+, args)
+end
+
+function count_terms!(f::typeof(+), terms::Dict, ex::SymExpr{typeof(*)})
+    α, ex = accumulate_numerics(*, ex) # make sure * terms are in "α * term" form
+    iszero(α) && return
+
+    if haskey(terms, ex)
+        terms[ex] += 1
+    else
+        terms[ex] = 1
+    end
+    return
 end
 
 function merge_terms(::typeof(*), ex::SymExpr)
     ex = flatten(*, ex)
-    terms = count_terms(ex)
+    terms = Dict{Any, Int}()
+    α = 1
+    for each in ex.args
+        if each isa Number
+            α *= each
+        elseif haskey(terms, each)
+            terms[each] += 1
+        else
+            terms[each] = 1
+        end
+    end
+
+    iszero(α) && return 0
+
     args = []
-    for (term, α) in terms
-        if isone(α)
+    for (term, k) in terms
+        if isone(k)
             push!(args, term)
         else
-            push!(args, term^α)
+            push!(args, term^k)
         end
     end
 
     isempty(args) && return 0
+
     if length(args) == 1
-        return args[1]
+        ex = args[1]
     else
-        SymExpr(*, args)
+        ex = SymExpr(*, args)
+    end
+    if isone(α)
+        return ex
+    else
+        return α * ex
     end
 end
 
-merge_sign(ex) = ex
 @rule function merge_sign(ex::SymExpr{typeof(+)})
     args = []
     prev = first(ex.args)
@@ -166,16 +224,12 @@ merge_sign(ex) = ex
     end
 end
 
-
-export rm_zeros
-
 """
     rm_zeros(x)
 
 Remove zeros in expression `x`.
 """
-@rule rm_zeros(x) = x
-function rm_zeros(ex::SymExpr)
+@rule function rm_zeros(ex::SymExpr)
     rm_zeros(ex.f, ex)
 end
 
@@ -232,9 +286,7 @@ end
 
 is_negone(x) = x == -one(x)
 
-@rule rm_ones(x) = x
-rm_ones(f, ex) = ex
-function rm_ones(x::SymExpr)
+@rule function rm_ones(x::SymExpr)
     rm_ones(x.f, x)
 end
 
@@ -340,8 +392,6 @@ function periodic_pi_factor(x::Rational)
     isodd(a) ? t + 1 : t
 end
 
-simple_power(x) = x
-
 @rule function simple_power(ex::SymExpr{typeof(^)})
     x, n = ex.args[1], ex.args[2]
     return simple_power(ex, x, n)
@@ -389,7 +439,6 @@ function simple_power(ex::SymExpr, x::SymExpr{typeof(exp)}, n)
     return SymExpr(exp, x.args[1] * n)
 end
 
-merge_complex(x) = x
 is_imaginary_unit(x) = false
 is_imaginary_unit(x::Im) = true
 
@@ -435,6 +484,9 @@ function maprule(rule, ex::SymExpr)
     end
 end
 
+maprule(rule, ex::SymReal) = maprule(rule, data(ex))
+maprule(rule, ex::SymComplex) = maprule(rule, data(ex))
+
 simplify_step(ex) = ex
 function simplify_step(ex::SymExpr; rules=DEFINED_RULES)
     for r in rules
@@ -456,4 +508,15 @@ function simplify(ex::SymExpr; rules=DEFINED_RULES, maxstep=1000)
     end
     @warn "simplification does not converge"
     return prev
+end
+
+function simplify(ex::T; rules=DEFINED_RULES, maxstep=1000) where {T <: Union{SymReal, SymComplex}}
+    T(simplify(data(ex), rules=rules, maxstep=maxstep))
+end
+
+# simplify
+function simplify(ex::AbstractArray{T}; rules=DEFINED_RULES, maxstep=1000) where {T <: Union{SymReal, SymComplex}}
+    broadcast(ex) do x
+        simplify(x, rules=DEFINED_RULES, maxstep=maxstep)
+    end
 end
