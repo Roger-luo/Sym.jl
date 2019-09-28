@@ -37,12 +37,12 @@ function print_func(io::IO, f, xs)
     print(io, ")")
 end
 
-for op in INFIX_OPERATORS
-    @eval print_term(io::IO, t::Term{typeof($op)}) = print_infix(io, $op, t.args)
-end
-
 function print_term(io::IO, t::Term)
-    print_func(io, t.head, t.args)
+    if isinfix(t.head)
+        print_infix(io, t.head, t.args)
+    else
+        print_func(io, t.head, t.args)
+    end
 end
 
 const UNIPOW = Dict()

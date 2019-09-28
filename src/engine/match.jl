@@ -3,21 +3,6 @@
 using Combinatorics: combinations, permutations
 export ismatch, Match, match, match!
 
-# traits
-abstract type Property end
-struct Associative <: Property end
-struct Communitive <: Property end
-struct AntiCommunitive <: Property end
-struct NoProperty <: Property end
-
-Property(::Type{F}, xs...) where F = Property(F.instance, xs...)
-Property(f, xs...) = NoProperty()
-
-const ASSOCIATE_AND_COMMUNITIVE = (Associative(), Communitive())
-Property(::typeof(*), xs::Number...) = ASSOCIATE_AND_COMMUNITIVE
-Property(::typeof(+), xs::Number...) = ASSOCIATE_AND_COMMUNITIVE
-Property(::typeof(-), xs::Number...) = AntiCommunitive()
-
 mutable struct Match <: AbstractSet{AbstractDict{Variable, Any}}
     matches::Set{Dict{Variable, Any}}
 end
