@@ -1,3 +1,5 @@
+# shamelessly took from Simplify.jl
+
 using Combinatorics: combinations, permutations
 export ismatch, Match, match, match!
 
@@ -16,7 +18,6 @@ Property(::typeof(*), xs::Number...) = ASSOCIATE_AND_COMMUNITIVE
 Property(::typeof(+), xs::Number...) = ASSOCIATE_AND_COMMUNITIVE
 Property(::typeof(-), xs::Number...) = AntiCommunitive()
 
-# shamelessly copied from Simplify.jl
 mutable struct Match <: AbstractSet{AbstractDict{Variable, Any}}
     matches::Set{Dict{Variable, Any}}
 end
@@ -53,7 +54,13 @@ function Base.merge!(Θ::Match, Θs::Match...)
 end
 Base.merge(σ::Match, σs::Match...) = merge!(one(Match), σ, σs...)
 
-match(pattern::Expression, term::Expression) = match!(one(Match), pattern, term)
+Base.match(pattern::Expression, term::Expression) = match!(one(Match), pattern, term)
+
+function Base.match(pattern::Expression, term::Expression, θ::Match)
+    m = match(pattern, term)
+    m === nothing && return
+    return merge(m, θ)
+end
 
 match!(m::Match, p, t) = p == t ? m : nothing
 match!(m::Match, x::Variable, t::Expression) = push!(m, x=>t)
@@ -69,12 +76,12 @@ end
 
 # fallback
 function match!(m::Match, ::Property, p::Term, t::Term)
-    length(p) == length(t) || return nothing
-    match!(m, p.head, t.head) === nothing && return nothing
+    length(p) == length(t) || return
+    match!(m, p.head, t.head) === nothing && return
 
     for (x, y) in zip(p.args, t.args)
         o = match(x, y)
-        o === nothing && return nothing
+        o === nothing && return
         merge!(m, o)
     end
     return m
@@ -88,17 +95,34 @@ function match!(m::Match, ::Communitive, p::Term, t::Term)
             nomatch = true
         end
     end
-    nomatch || return nothing
+    nomatch || return
     return m
 end
 
 # shamelessly took from Simplify
-# function match!(m::Match, ::Associative, p::Term, t::Term)
-#     match!(m, p.head, t.head)
-#     length(p) > length(t) && return m
+function match!(m::Match, ::Associative, p::Term, t::Term)
+    match!(m, p.head, t.head)
+    length(p) > length(t) && return m
 
-#     k = 1
-#     for pk in p.args
-#         match!(m, pk, t.args[k])
-#     end
-# end
+    match!(m, p.head, t.head) === nothing && return
+
+    length(p) > length(t) && return
+    n_free = length(t) - length(p)
+    n_vars = count(x -> x isa Variable, p.args)
+
+    for k in Iterators.product((0:n_free for i in 1:n_vars)...)
+        (isempty(k) ? 0 : sum(k)) == n_free || continue
+        i, j = 1, 1
+        for pk in p.args
+            l_sub = 0
+            if pk isa Variable
+                l_sub += k[j]
+                j += 1
+            end
+            s′ = l_sub > 0 ? Term(t.head, t.args[i:i+l_sub]) : t.args[i]
+            match!(m, pk, s′) === nothing && break
+            i += l_sub + 1
+        end
+    end
+    return m
+end

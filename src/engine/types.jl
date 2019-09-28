@@ -48,7 +48,7 @@ to_expr(x) = x
 to_expr(x::Number) = Numeric(x)
 to_expr(x::Irrational) = Constant(x)
 
-term_m(x) = :(to_expr($x))
+term_m(x) = :(to_expr($(esc(x))))
 
 function term_m(ex::Expr)
     ex.head === :call || throw(Meta.ParseError("expect function call"))
