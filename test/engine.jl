@@ -2,16 +2,27 @@ using Test, Revise, Sym
 
 @vars x y
 
-p = sin(2Constant(:π))
+t = @term sin(2x)
 
-ismatch(x^0, p^0)
+p = sin(x)
 
--x * y
+m = match(p, t)
 
-@which -x
-
-using Combinatorics: combinations, permutations
-
-for each in permutations([x, y, x, x])
-    @show each
+findfirst(m) do d
+    haskey(d, )
 end
+
+substitude(Dict(x=>π), t)
+
+match(@term(-x*y), @term(-x * x))
+
+
+p = @term(sin(2π) + y)
+t = @term(sin(2π) + x)
+substitude(p=>y, t)
+
+d = p=>Numeric(0)
+
+t
+
+match(p, t)
