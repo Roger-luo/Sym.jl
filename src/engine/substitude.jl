@@ -12,6 +12,9 @@ function substitude(d::Pair{<:Term, <:Expression}, t::Term)
     p, s = d
     m = match(p, t)
     if m !== nothing
+        for each in m
+            s = substitude(each, s)
+        end
         return s
     end
 
