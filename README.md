@@ -7,6 +7,12 @@
 This is a package for symbolic computation in Julia with correct type bounds. It provides `SymReal`, `SymInteger`, `SymComplex` and `SymNumber` for each different
 mathematical domain with correct subtyping. Unlike other symbolic engines provides only symbolic types that are subtypes of `Number`. This will make a lot more generic Julia function defined on such domain "just work".
 
+## Installation
+
+```jl
+pkg> add https://github.com/Roger-luo/Sym.jl.git
+```
+
 ## Acknowledgement
 
 I appreciate the discussion under ModelingToolkit and slack with Mason Protter, Harrison Grodin, Chris Rackauckas and Taine Zhao. The implementation of pattern matching is taken from [Simplify](https://github.com/HarrisonGrodin/Simplify.jl)
