@@ -7,8 +7,9 @@ end
 substitude(d::Dict{Variable}, t::Variable) = haskey(d, t) ? d[t] : t
 substitude(d::Dict{Variable}, t) = t
 
-substitude(::Pair, t) = t
-function substitude(d::Pair{<:Term, <:Expression}, t::Term)
+Base.replace(t::Expression, ::Pair) = t
+
+function Base.replace(t::Term, d::Pair{<:Term, <:Expression})
     p, s = d
     m = match(p, t)
     if m !== nothing
@@ -18,5 +19,5 @@ function substitude(d::Pair{<:Term, <:Expression}, t::Term)
         return s
     end
 
-    return Term(substitude(d, t.head), map(x->substitude(d, x), t.args))
+    return Term(replace(t.head, d), map(x->replace(x, d), t.args))
 end
