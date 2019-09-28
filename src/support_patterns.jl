@@ -1,3 +1,5 @@
+@as_record internal Term
+
 symbolic_pattern(mod::Module, ex) = ex
 symbolic_pattern(mod::Module, s::Symbol) = s === :_ ? s : Expr(:&, mod.eval(s))
 function symbolic_pattern(mod::Module, ex::Expr)
